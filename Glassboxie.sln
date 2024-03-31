@@ -5,6 +5,8 @@ VisualStudioVersion = 17.8.34322.80
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Glassboxie", "Glassboxie\Glassboxie.vcxproj", "{FBBE40AF-124A-41D1-9563-C0E014FC09FC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LibGlassboxie", "LibGlassboxie\LibGlassboxie.vcxitems", "{27297799-9D77-4643-8285-F62C7E2C9673}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
