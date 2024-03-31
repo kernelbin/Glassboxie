@@ -30,4 +30,8 @@ Global
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5D4E3CD3-4FD4-4841-948E-941CF8E415DD}
 	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		LibGlassboxie\LibGlassboxie.vcxitems*{27297799-9d77-4643-8285-f62c7e2c9673}*SharedItemsImports = 9
+		LibGlassboxie\LibGlassboxie.vcxitems*{fbbe40af-124a-41d1-9563-c0e014fc09fc}*SharedItemsImports = 4
+	EndGlobalSection
 EndGlobal

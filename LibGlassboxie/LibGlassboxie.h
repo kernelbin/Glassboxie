@@ -1,0 +1,4 @@
+#ifndef LIBGLASSBOXIE_H_
+#define LIBGLASSBOXIE_H_
+
+#endif // LIBGLASSBOXIE_H_
