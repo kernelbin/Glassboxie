@@ -4,10 +4,61 @@
 #include <strsafe.h>
 #include <atlcoll.h>
 #include <atlfile.h>
+#include <vector>
+#include <string>
+#include "yyjson.h"
 
 #ifndef UNICODE
 #error must be compiled with UNICODE enabled.
 #endif
+
+
+struct GBIE_CONFIG
+{
+    std::wstring Name;
+    std::wstring Version;
+};
+
+static std::wstring MultiByteToWString(UINT CodePage, const char* string)
+{
+    std::wstring wstring;
+    int cchLen = MultiByteToWideChar(CodePage, NULL, string, -1, NULL, 0);
+    LPCWSTR WideString = (LPCWSTR)HeapAlloc(GetProcessHeap(), 0, cchLen * sizeof(WCHAR));
+    wstring = std::wstring(WideString);
+    HeapFree(GetProcessHeap(), 0, (LPVOID)WideString);
+    return wstring;
+}
+static BOOL ParseConfigFile(const PBYTE Buffer, SIZE_T BufferLength,  GBIE_CONFIG& Config)
+{
+    BOOL bSuccess = FALSE;
+    yyjson_doc* JsonDoc = yyjson_read((const char *)Buffer, BufferLength, 0);
+    if (!JsonDoc)
+        return FALSE;
+    __try
+    {
+        yyjson_val* JsonRoot = yyjson_doc_get_root(JsonDoc);
+
+        yyjson_val* JsonName = yyjson_obj_get(JsonRoot, "name");
+        yyjson_val* JsonVersion = yyjson_obj_get(JsonRoot, "version");
+        if (!JsonName || !JsonVersion)
+            __leave;
+        const char* NameStr = yyjson_get_str(JsonName);
+        const char* VersionStr = yyjson_get_str(JsonVersion);
+        if (!NameStr || !VersionStr)
+            __leave;
+
+
+        Config.Name = MultiByteToWString(CP_UTF8, NameStr);
+        Config.Version = MultiByteToWString(CP_UTF8, VersionStr);
+
+        bSuccess = TRUE;
+    }
+    __finally
+    {
+        yyjson_doc_free(JsonDoc);
+    }
+    return bSuccess;
+}
 
 BOOL HandleCreateCommand(int argc, WCHAR** argv)
 {
@@ -22,16 +73,28 @@ BOOL HandleCreateCommand(int argc, WCHAR** argv)
         ATL::CAtlFile ConfigFile;
         if (FAILED(ConfigFile.Create(argv[i], GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING)))
         {
-            ConsolePrint(VT_YELLOW("Warning: failed to open file: %1\n"), argv[1]);
+            ConsolePrint(VT_YELLOW("Warning: failed to open file: %1\n"), argv[i]);
             continue;
         }
         ULONGLONG FileSize = 0;
         if (FAILED(ConfigFile.GetSize(FileSize)))
         {
-            ConsolePrint(VT_YELLOW("Warning: failed to open file: %1\n"), argv[1]);
+            ConsolePrint(VT_YELLOW("Warning: failed to open file: %1\n"), argv[i]);
             continue;
         }
-        // continue here: 判断大小并读取配置文件
+        CSimpleArray<BYTE> A;
+        std::vector<BYTE> Buffer(FileSize);
+
+        ConfigFile.Read(Buffer.data(), FileSize);
+
+        GBIE_CONFIG Config;
+        if (!ParseConfigFile(Buffer.data(), Buffer.size(), Config))
+        {
+            ConsolePrint(VT_YELLOW("Warning: failed to parse config file: %1\n"), argv[i]);
+            continue;
+        }
+        
+        GbieCreateSandbox()
     }
 
     return TRUE;
@@ -53,7 +116,7 @@ BOOL HandleCommandLine(int argc, WCHAR** argv)
     // create
     //    create config_file
     // delete
-    //    deleet sandbox_name
+    //    delete sandbox_name
     // run
     //    run sandbox_name executable
 

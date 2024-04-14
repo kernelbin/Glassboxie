@@ -21,9 +21,15 @@
     <ClCompile Include="VTConsoleIO.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="yyjson.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="VTConsoleIO.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="yyjson.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

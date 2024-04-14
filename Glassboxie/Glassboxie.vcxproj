@@ -130,9 +130,11 @@
   <ItemGroup>
     <ClCompile Include="Glassboxie.cpp" />
     <ClCompile Include="VTConsoleIO.cpp" />
+    <ClCompile Include="yyjson.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="VTConsoleIO.h" />
+    <ClInclude Include="yyjson.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
