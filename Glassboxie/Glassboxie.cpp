@@ -19,14 +19,12 @@ struct GBIE_CONFIG
     std::wstring Version;
 };
 
-static std::wstring MultiByteToWString(UINT CodePage, const char* string)
+static void MultiByteToWString(UINT CodePage, const char* string, std::wstring &wstring)
 {
-    std::wstring wstring;
     int cchLen = MultiByteToWideChar(CodePage, NULL, string, -1, NULL, 0);
     LPCWSTR WideString = (LPCWSTR)HeapAlloc(GetProcessHeap(), 0, cchLen * sizeof(WCHAR));
     wstring = std::wstring(WideString);
     HeapFree(GetProcessHeap(), 0, (LPVOID)WideString);
-    return wstring;
 }
 static BOOL ParseConfigFile(const PBYTE Buffer, SIZE_T BufferLength,  GBIE_CONFIG& Config)
 {
@@ -48,8 +46,8 @@ static BOOL ParseConfigFile(const PBYTE Buffer, SIZE_T BufferLength,  GBIE_CONFI
             __leave;
 
 
-        Config.Name = MultiByteToWString(CP_UTF8, NameStr);
-        Config.Version = MultiByteToWString(CP_UTF8, VersionStr);
+        MultiByteToWString(CP_UTF8, NameStr, Config.Name);
+        MultiByteToWString(CP_UTF8, VersionStr, Config.Version);
 
         bSuccess = TRUE;
     }
@@ -93,8 +91,6 @@ BOOL HandleCreateCommand(int argc, WCHAR** argv)
             ConsolePrint(VT_YELLOW("Warning: failed to parse config file: %1\n"), argv[i]);
             continue;
         }
-        
-        GbieCreateSandbox()
     }
 
     return TRUE;
@@ -145,6 +141,7 @@ BOOL HandleCommandLine(int argc, WCHAR** argv)
 
 int wmain(int argc, WCHAR** argv)
 {
+    GbieCreateSandbox(L"aa", 0);
     if (!HandleCommandLine(argc - 1, argv + 1))
     {
         ConsolePrint(
