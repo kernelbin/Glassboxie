@@ -1,6 +1,8 @@
 #include "LibGlassboxie.h"
 #include <windows.h>
 #include <bcrypt.h>
+#include <Userenv.h>
+#include <strsafe.h>
 
 
 #define NT_SUCCESS(Status)          (((NTSTATUS)(Status)) >= 0)
@@ -8,6 +10,7 @@
 
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "Crypt32.lib")
+#pragma comment(lib, "Userenv.lib")
 
 
 static BOOL GetExtendHashName(const WCHAR SandboxName[], WCHAR ExtendHashName[], int cchExtendHashName)
@@ -90,23 +93,23 @@ static BOOL GetExtendHashName(const WCHAR SandboxName[], WCHAR ExtendHashName[],
         DWORD SandboxNameLength = wcslen(SandboxName);
         DWORD GlassboxieVersion = GLASSBOXIE_VERSION;
 
-        //if (!NT_SUCCESS(status = BCryptHashData(
-        //    hHash,
-        //    (PBYTE)&GlassboxieVersion,
-        //    sizeof(DWORD),
-        //    0)))
-        //{
-        //    __leave;
-        //}
+        if (!NT_SUCCESS(status = BCryptHashData(
+            hHash,
+            (PBYTE)&GlassboxieVersion,
+            sizeof(DWORD),
+            0)))
+        {
+            __leave;
+        }
 
-        //if (!NT_SUCCESS(status = BCryptHashData(
-        //    hHash,
-        //    (PBYTE)&SandboxNameLength,
-        //    sizeof(DWORD),
-        //    0)))
-        //{
-        //    __leave;
-        //}
+        if (!NT_SUCCESS(status = BCryptHashData(
+            hHash,
+            (PBYTE)&SandboxNameLength,
+            sizeof(DWORD),
+            0)))
+        {
+            __leave;
+        }
 
         if (!NT_SUCCESS(status = BCryptHashData(
             hHash,
@@ -172,8 +175,60 @@ static BOOL GetExtendHashName(const WCHAR SandboxName[], WCHAR ExtendHashName[],
 
 BOOL GbieCreateSandbox(const WCHAR SandboxName[], BOOL bOpenExisting)
 {
-    WCHAR ExtendHashName[128];
+    WCHAR ExtendHashName[32];
     GetExtendHashName(SandboxName, ExtendHashName, _countof(ExtendHashName));
 
-    Sleep(0);
+    // AppContainerName can be up to 64 characters in length. 
+    WCHAR AppContainerName[64] = L"Glassboxie - ";
+    WCHAR AppContainerDisplayName[512] = L"Glassboxie - ";
+
+    if (FAILED(StringCchCatNW(AppContainerName, _countof(AppContainerName), ExtendHashName, _countof(ExtendHashName))))
+    {
+        return FALSE;
+    }
+
+    if (FAILED(StringCchCatW(AppContainerDisplayName, _countof(AppContainerDisplayName), SandboxName)))
+    {
+        return FALSE;
+    }
+
+    PSID pAppContainerSID = NULL;
+    HANDLE hJobObject = NULL;
+    HRESULT hresult = CreateAppContainerProfile(AppContainerName, AppContainerDisplayName, L"AppContainer created for Glassboxie.", NULL, 0, &pAppContainerSID);
+
+    if (FAILED(hresult))
+    {
+        // Try open existing one
+        if (hresult == ERROR_ALREADY_EXISTS && bOpenExisting)
+        {
+            if (FAILED(DeriveAppContainerSidFromAppContainerName(AppContainerName, &pAppContainerSID)))
+            {
+                return FALSE;
+            }
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+
+    __try
+    {
+
+        WCHAR JobObjectName[512] = L"Glassboxie JobObject - ";
+        if (FAILED(StringCchCatNW(JobObjectName, _countof(JobObjectName), ExtendHashName, _countof(ExtendHashName))))
+        {
+            __leave;
+        }
+        // TODO: better to be created in private namespace...?
+        // see CreatePrivateNamespaceW
+        hJobObject = CreateJobObjectW(NULL, JobObjectName);
+    }
+    __finally
+    {
+        if (hJobObject)
+            CloseHandle(hJobObject);
+        if (pAppContainerSID)
+            FreeSid(pAppContainerSID);
+    }
 }
