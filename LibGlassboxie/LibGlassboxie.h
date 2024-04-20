@@ -7,7 +7,16 @@ EXTERN_C_START
 
 #define GLASSBOXIE_VERSION 1
 
-BOOL GbieCreateSandbox(const WCHAR SandboxName[], BOOL bOpenExisting);
+typedef struct GLASSBOXIE {
+    WCHAR Name[64];
+    PSID AppContainerSID;
+    HANDLE hJobObject;
+
+} GLASSBOXIE, GBIE, *PGBIE;
+
+PGBIE GbieCreateSandbox(
+    _In_ const WCHAR SandboxName[],
+    _In_ BOOL bOpenExisting);
 
 EXTERN_C_END
 

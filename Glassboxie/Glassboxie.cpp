@@ -83,7 +83,7 @@ BOOL HandleCreateCommand(int argc, WCHAR** argv)
         CSimpleArray<BYTE> A;
         std::vector<BYTE> Buffer(FileSize);
 
-        ConfigFile.Read(Buffer.data(), FileSize);
+        ConfigFile.Read(Buffer.data(), (DWORD)FileSize);
 
         GBIE_CONFIG Config;
         if (!ParseConfigFile(Buffer.data(), Buffer.size(), Config))
@@ -141,7 +141,7 @@ BOOL HandleCommandLine(int argc, WCHAR** argv)
 
 int wmain(int argc, WCHAR** argv)
 {
-    GbieCreateSandbox(L"aa", 0);
+    GbieCreateSandbox(L"aa", 1);
     if (!HandleCommandLine(argc - 1, argv + 1))
     {
         ConsolePrint(
