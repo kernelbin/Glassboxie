@@ -190,13 +190,20 @@ PGBIE GbieCreateSandbox(
     GetExtendHashName(SandboxName, ExtendHashName, _countof(ExtendHashName));
 
     // AppContainerName can be up to 64 characters in length. 
-    WCHAR AppContainerName[64] = L"Glassboxie - ";
+    WCHAR AppContainerName[APPCONTAINER_NAME_MAX] = L"Glassboxie - ";
     WCHAR AppContainerDisplayName[512] = L"Glassboxie - ";
 
-    if (FAILED(StringCchCatNW(AppContainerName, _countof(AppContainerName), ExtendHashName, _countof(ExtendHashName))))
+    if (FAILED(StringCchCatNW(
+        AppContainerName,
+        _countof(AppContainerName),
+        ExtendHashName,
+        _countof(ExtendHashName))))
         return FALSE;
 
-    if (FAILED(StringCchCatW(AppContainerDisplayName, _countof(AppContainerDisplayName), SandboxName)))
+    if (FAILED(StringCchCatW(
+        AppContainerDisplayName,
+        _countof(AppContainerDisplayName),
+        SandboxName)))
         return FALSE;
 
     pGbie = (PGBIE)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(GBIE));
@@ -218,7 +225,9 @@ PGBIE GbieCreateSandbox(
             // Try open existing one
             if (HRESULT_CODE(hresult) == ERROR_ALREADY_EXISTS && bOpenExisting)
             {
-                if (FAILED(DeriveAppContainerSidFromAppContainerName(AppContainerName, &pAppContainerSID)))
+                if (FAILED(DeriveAppContainerSidFromAppContainerName(
+                    AppContainerName,
+                    &pAppContainerSID)))
                 {
                     __leave;
                 }
@@ -230,16 +239,28 @@ PGBIE GbieCreateSandbox(
         }
 
         WCHAR JobObjectName[512] = L"Glassboxie JobObject - ";
-        if (FAILED(StringCchCatNW(JobObjectName, _countof(JobObjectName), ExtendHashName, _countof(ExtendHashName))))
+        if (FAILED(StringCchCatNW(
+            JobObjectName,
+            _countof(JobObjectName),
+            ExtendHashName,
+            _countof(ExtendHashName))))
         {
             __leave;
         }
+
         // TODO: better to be created in private namespace...?
         // see CreatePrivateNamespaceW
         hJobObject = CreateJobObjectW(NULL, JobObjectName);
 
         // Copy information into pGbie
-        StringCchCopyW(pGbie->Name, _countof(pGbie->Name), SandboxName);
+        StringCchCopyW(
+            pGbie->Name,
+            _countof(pGbie->Name),
+            SandboxName);
+        StringCchCopyW(
+            pGbie->AppContainerName,
+            _countof(pGbie->AppContainerName),
+            AppContainerName);
         pGbie->AppContainerSID = pAppContainerSID;
         pGbie->hJobObject = hJobObject;
         bSuccess = TRUE;
@@ -258,4 +279,72 @@ PGBIE GbieCreateSandbox(
         }
     }
     return pGbie;
+}
+
+_Use_decl_annotations_
+BOOL GbieCreateProcess(
+    PGBIE pGbie,
+    LPCWSTR lpApplicationName,
+    LPCSTR lpCommandLine,
+    DWORD CreationFlags
+)
+{
+    BOOL bSuccess = FALSE;
+    STARTUPINFOEXW StartupInfo = { 0 };
+    PROCESS_INFORMATION ProcessInfo = { 0 };
+
+    __try
+    {
+        StartupInfo.StartupInfo.cb = sizeof(StartupInfo);
+
+        if (!CreateProcessW(
+            lpApplicationName,
+            lpCommandLine,
+            NULL,
+            NULL,
+            FALSE,
+            CreationFlags,
+            NULL,
+            lpCurrentDirectory,
+            &StartupInfo,
+            &ProcessInfo))
+        {
+            __leave;
+        }
+
+        bSuccess = TRUE;
+    }
+    __finally
+    {
+
+    }
+    return bSuccess;
+}
+
+_Use_decl_annotations_
+BOOL GbieCloseSandbox(
+    PGBIE pGbie
+)
+{
+    BOOL bSuccess = TRUE;
+    if (pGbie->hJobObject)
+        bSuccess &= CloseHandle(pGbie->hJobObject);
+    if (pGbie->AppContainerSID)
+        bSuccess &= (FreeSid(pGbie->AppContainerSID) == NULL);
+
+    HeapFree(GetProcessHeap(), 0, (LPVOID)pGbie);
+    return bSuccess;
+}
+
+_Use_decl_annotations_
+BOOL GbieDestroySandbox(
+    PGBIE pGbie
+)
+{
+    BOOL bSuccess = TRUE;
+    bSuccess &= TerminateJobObject(pGbie->hJobObject, EXIT_SUCCESS);
+    bSuccess &= SUCCEEDED(DeleteAppContainerProfile(pGbie->AppContainerName));
+
+    bSuccess &= GbieCloseSandbox(pGbie);
+    return bSuccess;
 }

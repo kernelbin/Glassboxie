@@ -19,14 +19,26 @@ struct GBIE_CONFIG
     std::wstring Version;
 };
 
-static void MultiByteToWString(UINT CodePage, const char* string, std::wstring &wstring)
+_Success_(return)
+static BOOL MultiByteToWString(
+    _In_ UINT CodePage,
+    _In_z_ const char* string,
+    _Out_ std::wstring &wstring)
 {
     int cchLen = MultiByteToWideChar(CodePage, NULL, string, -1, NULL, 0);
     LPCWSTR WideString = (LPCWSTR)HeapAlloc(GetProcessHeap(), 0, cchLen * sizeof(WCHAR));
+    if (!WideString)
+        return FALSE;
     wstring = std::wstring(WideString);
     HeapFree(GetProcessHeap(), 0, (LPVOID)WideString);
+    return TRUE;
 }
-static BOOL ParseConfigFile(const PBYTE Buffer, SIZE_T BufferLength,  GBIE_CONFIG& Config)
+
+_Success_(return)
+static BOOL ParseConfigFile(
+    _In_reads_(BufferLength) const PBYTE Buffer,
+    _In_ SIZE_T BufferLength,
+    _Out_ GBIE_CONFIG& Config)
 {
     BOOL bSuccess = FALSE;
     yyjson_doc* JsonDoc = yyjson_read((const char *)Buffer, BufferLength, 0);
@@ -46,8 +58,10 @@ static BOOL ParseConfigFile(const PBYTE Buffer, SIZE_T BufferLength,  GBIE_CONFI
             __leave;
 
 
-        MultiByteToWString(CP_UTF8, NameStr, Config.Name);
-        MultiByteToWString(CP_UTF8, VersionStr, Config.Version);
+        if (!MultiByteToWString(CP_UTF8, NameStr, Config.Name))
+            __leave;
+        if (!MultiByteToWString(CP_UTF8, VersionStr, Config.Version))
+            __leave;
 
         bSuccess = TRUE;
     }

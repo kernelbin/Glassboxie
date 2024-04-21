@@ -1,0 +1,11 @@
+root = true
+
+# All files
+[*]
+indent_style = space
+insert_final_newline = true
+rulers = 80
+
+# Xml files
+[*.xml]
+indent_size = 2
