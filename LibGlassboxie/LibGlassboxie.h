@@ -24,6 +24,17 @@ PGBIE GbieCreateSandbox(
     _In_ const WCHAR SandboxName[],
     _In_ BOOL bOpenExisting);
 
+_Success_(return)
+BOOL GbieCreateProcess(
+    _In_ PGBIE pGbie,
+    _In_opt_ LPCWSTR lpApplicationName,
+    _Inout_opt_ LPWSTR lpCommandLine,
+    _In_ DWORD CreationFlags,
+    _In_opt_ LPCWSTR lpCurrentDirectory,
+    _Out_ HANDLE* hProcess,
+    _Out_ HANDLE* hThread
+);
+
 BOOL GbieCloseSandbox(
     _In_ _Frees_ptr_ PGBIE pGbie
 );

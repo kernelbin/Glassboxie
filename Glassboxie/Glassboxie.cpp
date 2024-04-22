@@ -155,7 +155,9 @@ BOOL HandleCommandLine(int argc, WCHAR** argv)
 
 int wmain(int argc, WCHAR** argv)
 {
-    GbieCreateSandbox(L"aa", 1);
+    PGBIE Gbie = GbieCreateSandbox(L"aa", 1);
+    HANDLE hProcess, hThread;
+    GbieCreateProcess(Gbie, L"C:\\Windows\\System32\\cmd.exe", NULL, CREATE_NEW_CONSOLE, NULL, &hProcess, &hThread);
     if (!HandleCommandLine(argc - 1, argv + 1))
     {
         ConsolePrint(
