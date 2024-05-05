@@ -120,6 +120,26 @@ BOOL HandleRunCommand(int argc, WCHAR** argv)
     return TRUE;
 }
 
+BOOL HandleHelpCommand(int argc, WCHAR** argv)
+{
+    ConsolePrint(
+        L"Usage:\n"
+        L"    %1 [ CREATE | DELETE | RUN | HELP ] [<args>]\n", argv[0]);
+
+    ConsolePrint(
+        L"\n"
+        L"    CREATE\n"
+        L"        Create a sandbox specified by the configuration file.\n"
+        L"    DELETE\n"
+        L"        Delete specified sandbox, and terminate all process within it.\n"
+        L"    RUN\n"
+        L"        Run a process in specified sandbox.\n"
+        L"    HELP\n"
+        L"        Show this help message.\n");
+    return TRUE;
+}
+
+
 BOOL HandleCommandLine(int argc, WCHAR** argv)
 {
     // supported command
@@ -135,19 +155,22 @@ BOOL HandleCommandLine(int argc, WCHAR** argv)
         ConsolePrint(VT_RED("Error: too less argument.\n"));
         return FALSE;
     }
-    if (_wcsicmp(argv[1], L"create"))
+    if (_wcsicmp(argv[0], L"create") == 0)
     {
         return HandleCreateCommand(argc - 1, argv + 1);
     }
-    if (_wcsicmp(argv[1], L"delete"))
+    if (_wcsicmp(argv[0], L"delete") == 0)
     {
         return HandleDeleteCommand(argc - 1, argv + 1);
     }
-    if (_wcsicmp(argv[1], L"run"))
+    if (_wcsicmp(argv[0], L"run") == 0)
     {
         return HandleRunCommand(argc - 1, argv + 1);
     }
-
+    if (_wcsicmp(argv[0], L"help") == 0)
+    {
+        return HandleHelpCommand(argc, argv);
+    }
 
     ConsolePrint(L"Unknown command: %1\n", argv[0]);
     return FALSE;
@@ -162,7 +185,7 @@ int wmain(int argc, WCHAR** argv)
     {
         ConsolePrint(
             L"Usage:\n"
-            L"    %1 [ CREATE | DELETE | RUN ] [<args>]\n", argv[0]);
+            L"    %1 [ CREATE | DELETE | RUN | HELP ] [<args>]\n", argv[0]);
     }
     return 0;
 }
