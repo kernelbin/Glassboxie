@@ -384,7 +384,7 @@ BOOL GbieCreateProcess(
         // Then update information for it.
         InitializeProcThreadAttributeList(
             NULL,
-            1,
+            2,
             0,
             &ProcThreadAttrListSize);
 
@@ -396,7 +396,7 @@ BOOL GbieCreateProcess(
 
         if (!InitializeProcThreadAttributeList(
             StartupInfoEx.lpAttributeList,
-            1,
+            2,
             0,
             &ProcThreadAttrListSize))
             __leave;
@@ -417,6 +417,16 @@ BOOL GbieCreateProcess(
                 PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
                 &SecurityCapabilities,
                 sizeof(SecurityCapabilities),
+                NULL,
+                NULL))
+                __leave;
+
+            if (!UpdateProcThreadAttribute(
+                StartupInfoEx.lpAttributeList,
+                0,
+                PROC_THREAD_ATTRIBUTE_JOB_LIST,
+                &pGbie->hJobObject,
+                sizeof(HANDLE),
                 NULL,
                 NULL))
                 __leave;
