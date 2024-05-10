@@ -249,8 +249,9 @@ static BOOL FreeSecurityCapabilities(
 _Use_decl_annotations_
 PGBIE GbieCreateSandbox(
     _In_ const WCHAR SandboxName[],
-    BOOL bOpenExisting)
+    DWORD dwCreationDisposition)
 {
+
     BOOL bSuccess = FALSE;
     PGBIE pGbie = NULL;
     PSID pAppContainerSID = NULL;
@@ -262,6 +263,7 @@ PGBIE GbieCreateSandbox(
     // AppContainerName can be up to 64 characters in length. 
     WCHAR AppContainerName[APPCONTAINER_NAME_MAX] = L"Glassboxie - ";
     WCHAR AppContainerDisplayName[512] = L"Glassboxie - ";
+    WCHAR JobObjectName[512] = L"Glassboxie JobObject - ";
 
     if (FAILED(StringCchCatNW(
         AppContainerName,
@@ -274,6 +276,13 @@ PGBIE GbieCreateSandbox(
         AppContainerDisplayName,
         _countof(AppContainerDisplayName),
         SandboxName)))
+        return FALSE;
+
+    if (FAILED(StringCchCatNW(
+        JobObjectName,
+        _countof(JobObjectName),
+        ExtendHashName,
+        _countof(ExtendHashName))))
         return FALSE;
 
     pGbie = (PGBIE)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(GBIE));
@@ -292,9 +301,38 @@ PGBIE GbieCreateSandbox(
 
         if (FAILED(hresult))
         {
-            // Try open existing one
-            if (HRESULT_CODE(hresult) == ERROR_ALREADY_EXISTS && bOpenExisting)
+            if (HRESULT_CODE(hresult) != ERROR_ALREADY_EXISTS)
+                __leave;
+
+            // already exist
+
+            if (dwCreationDisposition == CREATE_ALWAYS ||
+                dwCreationDisposition == TRUNCATE_EXISTING)
             {
+                // "truncate" by deleting and re-creating
+                if (FAILED(DeleteAppContainerProfile(AppContainerName)))
+                    __leave;
+                // TODO: also revoke all granted access to files...
+
+                hresult = CreateAppContainerProfile(
+                    AppContainerName,
+                    AppContainerDisplayName,
+                    L"AppContainer created for Glassboxie.",
+                    NULL,
+                    0,
+                    &pAppContainerSID);
+                if (FAILED(hresult))
+                    __leave;
+            }
+            else if (dwCreationDisposition == CREATE_NEW)
+            {
+                __leave;
+            }
+            else if (
+                dwCreationDisposition == OPEN_ALWAYS ||
+                dwCreationDisposition == OPEN_EXISTING)
+            {
+                // then just get the SID...
                 if (FAILED(DeriveAppContainerSidFromAppContainerName(
                     AppContainerName,
                     &pAppContainerSID)))
@@ -307,20 +345,40 @@ PGBIE GbieCreateSandbox(
                 __leave;
             }
         }
-
-        WCHAR JobObjectName[512] = L"Glassboxie JobObject - ";
-        if (FAILED(StringCchCatNW(
-            JobObjectName,
-            _countof(JobObjectName),
-            ExtendHashName,
-            _countof(ExtendHashName))))
+        else
         {
-            __leave;
+            // does not exist and created now...
+            if (dwCreationDisposition == CREATE_ALWAYS ||
+                dwCreationDisposition == CREATE_NEW ||
+                dwCreationDisposition == OPEN_ALWAYS)
+            {
+                // OK
+                // TODO: grant access to objects...
+            }
+            else if (dwCreationDisposition == OPEN_EXISTING)
+            {
+                DeleteAppContainerProfile(AppContainerName);
+                __leave;
+            }
+            else if (dwCreationDisposition == TRUNCATE_EXISTING)
+            {
+                DeleteAppContainerProfile(AppContainerName);
+                __leave;
+            }
+            else
+            {
+                DeleteAppContainerProfile(AppContainerName);
+                __leave;
+            }
         }
 
         // TODO: better to be created in private namespace...?
         // see CreatePrivateNamespaceW
         hJobObject = CreateJobObjectW(NULL, JobObjectName);
+        if (!hJobObject)
+        {
+            __leave;
+        }
 
         // Copy information into pGbie
         StringCchCopyW(
@@ -374,7 +432,7 @@ BOOL GbieCreateProcess(
 
         // AppContainer SecurityCapabilities
         SECURITY_CAPABILITIES SecurityCapabilities = { 0 };
-        
+
         WELL_KNOWN_SID_TYPE EnabledCapabilities[] = {
             WinCapabilityPrivateNetworkClientServerSid
         };
@@ -491,9 +549,11 @@ BOOL GbieDestroySandbox(
 )
 {
     BOOL bSuccess = TRUE;
-    bSuccess &= TerminateJobObject(pGbie->hJobObject, EXIT_SUCCESS);
+    if (pGbie->hJobObject)
+    {
+        bSuccess &= TerminateJobObject(pGbie->hJobObject, EXIT_SUCCESS);
+    }
     bSuccess &= SUCCEEDED(DeleteAppContainerProfile(pGbie->AppContainerName));
-
     bSuccess &= GbieCloseSandbox(pGbie);
     return bSuccess;
 }

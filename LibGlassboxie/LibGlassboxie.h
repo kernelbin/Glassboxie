@@ -22,7 +22,7 @@ typedef struct GLASSBOXIE {
 
 PGBIE GbieCreateSandbox(
     _In_ const WCHAR SandboxName[],
-    _In_ BOOL bOpenExisting);
+    _In_ DWORD dwCreationDisposition);
 
 _Success_(return)
 BOOL GbieCreateProcess(

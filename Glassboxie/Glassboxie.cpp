@@ -150,24 +150,24 @@ BOOL HandleCommandLine(int argc, WCHAR** argv)
     // run
     //    run sandbox_name executable
 
-    if (argc <= 0)
+    if (argc <= 1)
     {
         ConsolePrint(VT_RED("Error: too less argument.\n"));
         return FALSE;
     }
-    if (_wcsicmp(argv[0], L"create") == 0)
+    if (_wcsicmp(argv[1], L"create") == 0)
     {
-        return HandleCreateCommand(argc - 1, argv + 1);
+        return HandleCreateCommand(argc - 2, argv + 2);
     }
-    if (_wcsicmp(argv[0], L"delete") == 0)
+    if (_wcsicmp(argv[1], L"delete") == 0)
     {
-        return HandleDeleteCommand(argc - 1, argv + 1);
+        return HandleDeleteCommand(argc - 2, argv + 2);
     }
-    if (_wcsicmp(argv[0], L"run") == 0)
+    if (_wcsicmp(argv[1], L"run") == 0)
     {
-        return HandleRunCommand(argc - 1, argv + 1);
+        return HandleRunCommand(argc - 2, argv + 2);
     }
-    if (_wcsicmp(argv[0], L"help") == 0)
+    if (_wcsicmp(argv[1], L"help") == 0)
     {
         return HandleHelpCommand(argc, argv);
     }
@@ -178,10 +178,7 @@ BOOL HandleCommandLine(int argc, WCHAR** argv)
 
 int wmain(int argc, WCHAR** argv)
 {
-    PGBIE Gbie = GbieCreateSandbox(L"aa", 1);
-    HANDLE hProcess, hThread;
-    GbieCreateProcess(Gbie, L"C:\\Windows\\System32\\cmd.exe", NULL, CREATE_NEW_CONSOLE, NULL, &hProcess, &hThread);
-    if (!HandleCommandLine(argc - 1, argv + 1))
+    if (!HandleCommandLine(argc, argv))
     {
         ConsolePrint(
             L"Usage:\n"
