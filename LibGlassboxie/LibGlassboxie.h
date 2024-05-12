@@ -27,6 +27,8 @@ typedef struct GLASSBOXIE_OBJECTACCESS {
     LPCWSTR pObjectName;
 
     SE_OBJECT_TYPE ObjectType;
+    DWORD          AccessPermissions;
+    ACCESS_MODE    AccessMode;
 }GBIE_OBJECT_ACCESS, *PGBIE_OBJECT_ACCESS;
 
 PGBIE GbieCreateSandbox(

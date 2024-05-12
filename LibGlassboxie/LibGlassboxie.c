@@ -507,6 +507,78 @@ BOOL GbieSandboxSetNamedObjectAccess(
     PGBIE_OBJECT_ACCESS pObjectAccess
 )
 {
+    BOOL bSuccess = FALSE;
+
+    PACL OriginalACL = NULL;
+    PSECURITY_DESCRIPTOR pSD = NULL;
+    PACL NewACL = NULL;
+
+    if (pObjectAccess->hObject)
+    {
+        if (GetSecurityInfo(pObjectAccess->hObject,
+            pObjectAccess->ObjectType,
+            DACL_SECURITY_INFORMATION,
+            NULL, NULL, &OriginalACL, NULL, &pSD) != ERROR_SUCCESS)
+            return FALSE;
+    }
+    else if (pObjectAccess->pObjectName)
+    {
+        if (GetNamedSecurityInfoW(pObjectAccess->pObjectName,
+            pObjectAccess->ObjectType,
+            DACL_SECURITY_INFORMATION,
+            NULL, NULL, &OriginalACL, NULL, &pSD) != ERROR_SUCCESS)
+            return FALSE;
+    }
+    else
+    {
+        // none is valid
+        return FALSE;
+    }
+
+    __try
+    {
+        EXPLICIT_ACCESS_W ExplicitAccess = { 0 };
+
+        ExplicitAccess.grfAccessMode = pObjectAccess->AccessMode;
+        ExplicitAccess.grfAccessPermissions = pObjectAccess->AccessPermissions;
+        ExplicitAccess.grfInheritance = OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE;
+
+        ExplicitAccess.Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
+        ExplicitAccess.Trustee.pMultipleTrustee = NULL;
+        ExplicitAccess.Trustee.ptstrName = (LPWCH)pGbie->AppContainerSID;
+        ExplicitAccess.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+        ExplicitAccess.Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
+
+
+        if (SetEntriesInAclW(1, &ExplicitAccess, OriginalACL, &NewACL) != ERROR_SUCCESS)
+            __leave;
+
+        if (pObjectAccess->hObject)
+        {
+            if (SetSecurityInfo(pObjectAccess->hObject,
+                pObjectAccess->ObjectType,
+                DACL_SECURITY_INFORMATION,
+                NULL, NULL, &NewACL, NULL) != ERROR_SUCCESS)
+                __leave;
+        }
+        else if (pObjectAccess->pObjectName)
+        {
+            if (SetNamedSecurityInfoW(pObjectAccess->pObjectName,
+                pObjectAccess->ObjectType,
+                DACL_SECURITY_INFORMATION,
+                NULL, NULL, &NewACL, NULL) != ERROR_SUCCESS)
+                __leave;
+        }
+        bSuccess = TRUE;
+    }
+    __finally
+    {
+        if (pSD)
+            LocalFree(pSD);
+        if (NewACL)
+            LocalFree(NewACL);
+    }
+    return bSuccess;
 }
 
 _Use_decl_annotations_
