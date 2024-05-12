@@ -176,6 +176,85 @@ static BOOL GetExtendHashName(
     return bSuccess;
 }
 
+static LSTATUS CreateSandboxRegistry(
+    _In_ const WCHAR SandboxName[],
+    _Out_ PHKEY phResult,
+    _Out_opt_ LPDWORD lpdwDisposition
+)
+{
+    LSTATUS lStatus;
+    HKEY hKeySoftware = NULL, hKeyGlassboxie = NULL, hKeySandbox = NULL;
+    __try
+    {
+        lStatus = RegOpenKeyExW(HKEY_CURRENT_USER, L"SOFTWARE", 0, KEY_ALL_ACCESS, &hKeySoftware);
+        if (lStatus != ERROR_SUCCESS)
+        {
+            __leave;
+        }
+
+        lStatus = RegCreateKeyExW(hKeySoftware, L"Glassboxie", 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hKeyGlassboxie, NULL);
+        if (lStatus != ERROR_SUCCESS)
+        {
+            __leave;
+        }
+
+        lStatus = RegCreateKeyExW(hKeyGlassboxie, SandboxName, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hKeySandbox, lpdwDisposition);
+        if (lStatus != ERROR_SUCCESS)
+        {
+            __leave;
+        }
+    }
+    __finally
+    {
+        if (hKeySoftware)
+            RegCloseKey(hKeySoftware);
+        if (hKeyGlassboxie)
+            RegCloseKey(hKeyGlassboxie);
+
+        if (lStatus != ERROR_SUCCESS)
+        {
+            if (hKeySandbox)
+                RegCloseKey(hKeySandbox);
+
+            hKeySandbox = NULL;
+        }
+    }
+    *phResult = hKeySandbox;
+    return lStatus;
+}
+
+static LSTATUS DeleteSandboxRegistry(
+    _In_ const WCHAR SandboxName[]
+)
+{
+    LSTATUS lStatus;
+    HKEY hKeySoftware = NULL, hKeyGlassboxie = NULL;
+    __try
+    {
+        lStatus = RegOpenKeyExW(HKEY_CURRENT_USER, L"SOFTWARE", 0, KEY_ALL_ACCESS, &hKeySoftware);
+        if (lStatus != ERROR_SUCCESS)
+        {
+            __leave;
+        }
+
+        lStatus = RegOpenKeyExW(hKeySoftware, L"Glassboxie", 0, KEY_ALL_ACCESS, &hKeyGlassboxie);
+        if (lStatus != ERROR_SUCCESS)
+        {
+            __leave;
+        }
+
+        lStatus = RegDeleteKeyW(hKeyGlassboxie, SandboxName);
+    }
+    __finally
+    {
+        if (hKeySoftware)
+            RegCloseKey(hKeySoftware);
+        if (hKeyGlassboxie)
+            RegCloseKey(hKeyGlassboxie);
+    }
+    return lStatus;
+}
+
 static BOOL AllocateEnabledSecurityCapabilities(
     _Inout_ PSID_AND_ATTRIBUTES* pSecurityCapabilities,
     _In_reads_(CntCapabilities) WELL_KNOWN_SID_TYPE* EnabledCapabilities,
@@ -248,7 +327,7 @@ static BOOL FreeSecurityCapabilities(
 
 _Use_decl_annotations_
 PGBIE GbieCreateSandbox(
-    _In_ const WCHAR SandboxName[],
+    const WCHAR SandboxName[],
     DWORD dwCreationDisposition)
 {
 
@@ -256,12 +335,14 @@ PGBIE GbieCreateSandbox(
     PGBIE pGbie = NULL;
     PSID pAppContainerSID = NULL;
     HANDLE hJobObject = NULL;
+    HKEY hKeySandbox = NULL;
+    DWORD dwSandboxRegkeyDisposition = 0;
 
     WCHAR ExtendHashName[32];
     GetExtendHashName(SandboxName, ExtendHashName, _countof(ExtendHashName));
 
     // AppContainerName can be up to 64 characters in length. 
-    WCHAR AppContainerName[APPCONTAINER_NAME_MAX] = L"Glassboxie - ";
+    WCHAR AppContainerName[APPCONTAINER_NAME_MAX + 1] = L"Glassboxie - ";
     WCHAR AppContainerDisplayName[512] = L"Glassboxie - ";
     WCHAR JobObjectName[512] = L"Glassboxie JobObject - ";
 
@@ -291,6 +372,11 @@ PGBIE GbieCreateSandbox(
 
     __try
     {
+        if (CreateSandboxRegistry(AppContainerName, &hKeySandbox, &dwSandboxRegkeyDisposition) != ERROR_SUCCESS)
+        {
+            __leave;
+        }
+
         HRESULT hresult = CreateAppContainerProfile(
             AppContainerName,
             AppContainerDisplayName,
@@ -395,6 +481,8 @@ PGBIE GbieCreateSandbox(
     }
     __finally
     {
+        RegCloseKey(hKeySandbox);
+
         if (!bSuccess)
         {
             if (hJobObject)
@@ -402,11 +490,23 @@ PGBIE GbieCreateSandbox(
             if (pAppContainerSID)
                 FreeSid(pAppContainerSID);
 
+            if (dwSandboxRegkeyDisposition == REG_CREATED_NEW_KEY)
+            {
+                DeleteSandboxRegistry(AppContainerName);
+            }
             HeapFree(GetProcessHeap(), 0, (LPVOID)pGbie);
             pGbie = NULL;
         }
     }
     return pGbie;
+}
+
+_Use_decl_annotations_
+BOOL GbieSandboxSetNamedObjectAccess(
+    PGBIE pGbie,
+    PGBIE_OBJECT_ACCESS pObjectAccess
+)
+{
 }
 
 _Use_decl_annotations_
@@ -554,6 +654,7 @@ BOOL GbieDestroySandbox(
         bSuccess &= TerminateJobObject(pGbie->hJobObject, EXIT_SUCCESS);
     }
     bSuccess &= SUCCEEDED(DeleteAppContainerProfile(pGbie->AppContainerName));
+    bSuccess &= (DeleteSandboxRegistry(pGbie->AppContainerName) == ERROR_SUCCESS);
     bSuccess &= GbieCloseSandbox(pGbie);
     return bSuccess;
 }

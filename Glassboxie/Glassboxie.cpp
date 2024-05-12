@@ -23,7 +23,7 @@ _Success_(return)
 static BOOL MultiByteToWString(
     _In_ UINT CodePage,
     _In_z_ const char* string,
-    _Out_ std::wstring &wstring)
+    _Out_ std::wstring& wstring)
 {
     int cchLen = MultiByteToWideChar(CodePage, NULL, string, -1, NULL, 0);
     LPCWSTR WideString = (LPCWSTR)HeapAlloc(GetProcessHeap(), 0, cchLen * sizeof(WCHAR));
@@ -41,7 +41,7 @@ static BOOL ParseConfigFile(
     _Out_ GBIE_CONFIG& Config)
 {
     BOOL bSuccess = FALSE;
-    yyjson_doc* JsonDoc = yyjson_read((const char *)Buffer, BufferLength, 0);
+    yyjson_doc* JsonDoc = yyjson_read((const char*)Buffer, BufferLength, 0);
     if (!JsonDoc)
         return FALSE;
     __try
@@ -72,7 +72,7 @@ static BOOL ParseConfigFile(
     return bSuccess;
 }
 
-BOOL HandleCreateCommand(int argc, WCHAR** argv)
+BOOL HandleCreateCommand(int argc, WCHAR * *argv)
 {
     if (argc < 1)
     {
@@ -105,6 +105,16 @@ BOOL HandleCreateCommand(int argc, WCHAR** argv)
             ConsolePrint(VT_YELLOW("Warning: failed to parse config file: %1\n"), argv[i]);
             continue;
         }
+
+        PGBIE pGbie = GbieCreateSandbox(Config.Name.c_str(), CREATE_ALWAYS);
+        if (!pGbie)
+        {
+            ConsolePrint(VT_YELLOW("Warning: failed to create sandbox %1 specified by file: %2\n"), Config.Name.c_str(), argv[i]);
+        }
+        else
+        {
+            GbieCloseSandbox(pGbie);
+        }
     }
 
     return TRUE;
@@ -117,6 +127,33 @@ BOOL HandleDeleteCommand(int argc, WCHAR** argv)
 
 BOOL HandleRunCommand(int argc, WCHAR** argv)
 {
+    if (argc < 2)
+    {
+        ConsolePrint(VT_RED("Error: too less arguments.\n"));
+    }
+
+    PGBIE pGbie = GbieCreateSandbox(argv[0], OPEN_EXISTING);
+    if (!pGbie)
+    {
+        ConsolePrint(VT_RED("Error: sandbox %1 not found.\n"), argv[0]);
+        return FALSE;
+    }
+
+    HANDLE hProcess = NULL, hThread = NULL;
+    if (!GbieCreateProcess(
+        pGbie,
+        argv[1],
+        NULL,
+        CREATE_NEW_CONSOLE,
+        NULL,
+        &hProcess,
+        &hThread))
+    {
+        ConsolePrint(
+            VT_RED("Error: failed to create process in sandbox %1.\n"),
+            argv[0]);
+        return FALSE;
+    }
     return TRUE;
 }
 

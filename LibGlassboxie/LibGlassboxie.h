@@ -2,6 +2,7 @@
 #define LIBGLASSBOXIE_H_
 
 #include <Windows.h>
+#include <aclapi.h>
 
 EXTERN_C_START
 
@@ -20,9 +21,22 @@ typedef struct GLASSBOXIE {
 
 } GLASSBOXIE, GBIE, *PGBIE;
 
+typedef struct GLASSBOXIE_OBJECTACCESS {
+    // one of the following must be non-null
+    HANDLE hObject;
+    LPCWSTR pObjectName;
+
+    SE_OBJECT_TYPE ObjectType;
+}GBIE_OBJECT_ACCESS, *PGBIE_OBJECT_ACCESS;
+
 PGBIE GbieCreateSandbox(
     _In_ const WCHAR SandboxName[],
     _In_ DWORD dwCreationDisposition);
+
+BOOL GbieSandboxSetNamedObjectAccess(
+    _Inout_ PGBIE pGbie,
+    _In_ PGBIE_OBJECT_ACCESS pObjectAccess
+    );
 
 _Success_(return)
 BOOL GbieCreateProcess(
