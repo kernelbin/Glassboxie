@@ -558,7 +558,7 @@ BOOL GbieSandboxSetNamedObjectAccess(
             if (SetSecurityInfo(pObjectAccess->hObject,
                 pObjectAccess->ObjectType,
                 DACL_SECURITY_INFORMATION,
-                NULL, NULL, &NewACL, NULL) != ERROR_SUCCESS)
+                NULL, NULL, NewACL, NULL) != ERROR_SUCCESS)
                 __leave;
         }
         else if (pObjectAccess->pObjectName)
@@ -566,7 +566,7 @@ BOOL GbieSandboxSetNamedObjectAccess(
             if (SetNamedSecurityInfoW(pObjectAccess->pObjectName,
                 pObjectAccess->ObjectType,
                 DACL_SECURITY_INFORMATION,
-                NULL, NULL, &NewACL, NULL) != ERROR_SUCCESS)
+                NULL, NULL, NewACL, NULL) != ERROR_SUCCESS)
                 __leave;
         }
         bSuccess = TRUE;

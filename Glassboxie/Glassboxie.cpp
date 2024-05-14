@@ -12,23 +12,29 @@
 #error must be compiled with UNICODE enabled.
 #endif
 
-
+struct GBIE_STORAGE_SETTINGS
+{
+    std::wstring Path;
+    DWORD Permissions;
+};
 struct GBIE_CONFIG
 {
     std::wstring Name;
     std::wstring Version;
+    std::vector<GBIE_STORAGE_SETTINGS> StorageSettingsList;
 };
 
 _Success_(return)
 static BOOL MultiByteToWString(
     _In_ UINT CodePage,
     _In_z_ const char* string,
-    _Out_ std::wstring& wstring)
+    _Out_ std::wstring & wstring)
 {
     int cchLen = MultiByteToWideChar(CodePage, NULL, string, -1, NULL, 0);
-    LPCWSTR WideString = (LPCWSTR)HeapAlloc(GetProcessHeap(), 0, cchLen * sizeof(WCHAR));
+    LPWSTR WideString = (LPWSTR)HeapAlloc(GetProcessHeap(), 0, cchLen * sizeof(WCHAR));
     if (!WideString)
         return FALSE;
+    MultiByteToWideChar(CodePage, NULL, string, -1, WideString, cchLen);
     wstring = std::wstring(WideString);
     HeapFree(GetProcessHeap(), 0, (LPVOID)WideString);
     return TRUE;
@@ -38,7 +44,7 @@ _Success_(return)
 static BOOL ParseConfigFile(
     _In_reads_(BufferLength) const PBYTE Buffer,
     _In_ SIZE_T BufferLength,
-    _Out_ GBIE_CONFIG& Config)
+    _Out_ GBIE_CONFIG & Config)
 {
     BOOL bSuccess = FALSE;
     yyjson_doc* JsonDoc = yyjson_read((const char*)Buffer, BufferLength, 0);
@@ -48,8 +54,13 @@ static BOOL ParseConfigFile(
     {
         yyjson_val* JsonRoot = yyjson_doc_get_root(JsonDoc);
 
-        yyjson_val* JsonName = yyjson_obj_get(JsonRoot, "name");
-        yyjson_val* JsonVersion = yyjson_obj_get(JsonRoot, "version");
+        yyjson_val* JsonName =
+            yyjson_obj_get(JsonRoot, "name");
+        yyjson_val* JsonVersion =
+            yyjson_obj_get(JsonRoot, "version");
+        yyjson_val* JsonStorageSettings =
+            yyjson_obj_get(JsonRoot, "storage_settings");
+
         if (!JsonName || !JsonVersion)
             __leave;
         const char* NameStr = yyjson_get_str(JsonName);
@@ -57,6 +68,42 @@ static BOOL ParseConfigFile(
         if (!NameStr || !VersionStr)
             __leave;
 
+        if (JsonStorageSettings)
+        {
+            if (yyjson_is_arr(JsonStorageSettings))
+            {
+                size_t StorageSettingsSize = yyjson_arr_size(JsonStorageSettings);
+                yyjson_val* StorageSettingsEntry = yyjson_arr_get_first(JsonStorageSettings);
+
+                for (SIZE_T i = 0; i < StorageSettingsSize; i++)
+                {
+                    [](GBIE_CONFIG& Config, yyjson_val* StorageSettingsEntry) {
+
+                        yyjson_val* PathVal;
+                        yyjson_val* PermissionsVal;
+                        PathVal = yyjson_obj_get(StorageSettingsEntry, "path");
+                        PermissionsVal = yyjson_obj_get(StorageSettingsEntry, "permissions");
+
+                        if (PathVal && PermissionsVal)
+                        {
+                            if (yyjson_is_str(PathVal) && yyjson_is_uint(PermissionsVal))
+                            {
+                                GBIE_STORAGE_SETTINGS StorageSettings;
+
+                                const char* Path = yyjson_get_str(PathVal);
+                                DWORD Permissions = yyjson_get_uint(PermissionsVal);
+
+                                MultiByteToWString(CP_UTF8, Path, StorageSettings.Path);
+                                StorageSettings.Permissions = Permissions;
+                                Config.StorageSettingsList.push_back(StorageSettings);
+                            }
+                        }
+                        }(Config, StorageSettingsEntry);
+
+                        StorageSettingsEntry = unsafe_yyjson_get_next(StorageSettingsEntry);
+                }
+            }
+        }
 
         if (!MultiByteToWString(CP_UTF8, NameStr, Config.Name))
             __leave;
@@ -109,23 +156,44 @@ BOOL HandleCreateCommand(int argc, WCHAR * *argv)
         PGBIE pGbie = GbieCreateSandbox(Config.Name.c_str(), CREATE_ALWAYS);
         if (!pGbie)
         {
-            ConsolePrint(VT_YELLOW("Warning: failed to create sandbox %1 specified by file: %2\n"), Config.Name.c_str(), argv[i]);
+            ConsolePrint(
+                VT_YELLOW("Warning: failed to create sandbox %1 specified by file: %2\n"),
+                Config.Name.c_str(), argv[i]);
+            continue;
         }
-        else
+
+        // Also set storage settings
+
+        for (auto& StorageSetting : Config.StorageSettingsList)
         {
-            GbieCloseSandbox(pGbie);
+            GBIE_OBJECT_ACCESS ObjectAccess = { 0 };
+            ObjectAccess.AccessPermissions = StorageSetting.Permissions;
+            ObjectAccess.AccessMode = GRANT_ACCESS;
+            ObjectAccess.ObjectType = SE_FILE_OBJECT;
+            ObjectAccess.pObjectName = StorageSetting.Path.c_str();
+            ObjectAccess.hObject = NULL;
+
+            if (!GbieSandboxSetNamedObjectAccess(pGbie, &ObjectAccess))
+            {
+                ConsolePrint(
+                    VT_YELLOW("Warning: failed to grant file access to sandbox %1. file: %2\n"),
+                    Config.Name.c_str(),
+                    StorageSetting.Path.c_str()
+                );
+            }
         }
+        GbieCloseSandbox(pGbie);
     }
 
     return TRUE;
 }
 
-BOOL HandleDeleteCommand(int argc, WCHAR** argv)
+BOOL HandleDeleteCommand(int argc, WCHAR * *argv)
 {
     return TRUE;
 }
 
-BOOL HandleRunCommand(int argc, WCHAR** argv)
+BOOL HandleRunCommand(int argc, WCHAR * *argv)
 {
     if (argc < 2)
     {
@@ -157,7 +225,7 @@ BOOL HandleRunCommand(int argc, WCHAR** argv)
     return TRUE;
 }
 
-BOOL HandleHelpCommand(int argc, WCHAR** argv)
+BOOL HandleHelpCommand(int argc, WCHAR * *argv)
 {
     ConsolePrint(
         L"Usage:\n"
@@ -177,7 +245,7 @@ BOOL HandleHelpCommand(int argc, WCHAR** argv)
 }
 
 
-BOOL HandleCommandLine(int argc, WCHAR** argv)
+BOOL HandleCommandLine(int argc, WCHAR * *argv)
 {
     // supported command
     // create
@@ -213,7 +281,7 @@ BOOL HandleCommandLine(int argc, WCHAR** argv)
     return FALSE;
 }
 
-int wmain(int argc, WCHAR** argv)
+int wmain(int argc, WCHAR * *argv)
 {
     if (!HandleCommandLine(argc, argv))
     {
