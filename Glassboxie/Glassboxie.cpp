@@ -195,12 +195,50 @@ BOOL HandleDeleteCommand(int argc, WCHAR * *argv)
 
 BOOL HandleRunCommand(int argc, WCHAR * *argv)
 {
-    if (argc < 2)
+    LPCWSTR RunSandboxName = NULL;
+    LPWSTR RunCommandLine = NULL;
+    LPCWSTR RunCurrentDirectory = NULL;
+
+    for (SIZE_T i = 0; i < argc; i++)
     {
-        ConsolePrint(VT_RED("Error: too less arguments.\n"));
+        if (_wcsicmp(argv[i], L"-D") == 0)
+        {
+            if (i + 1 >= argc)
+            {
+                ConsolePrint(VT_RED("Error: missing arguments after option -D.\n"));
+                return FALSE;
+            }
+            else
+            {
+                i++;
+                RunCurrentDirectory = argv[i];
+            }
+        }
+        else
+        {
+            if (!RunSandboxName)
+            {
+                RunSandboxName = argv[i];
+            }
+            else if (!RunCommandLine)
+            {
+                RunCommandLine = argv[i];
+            }
+            else
+            {
+                ConsolePrint(VT_RED("Error: too much arguments.\n"));
+                return FALSE;
+            }
+        }
     }
 
-    PGBIE pGbie = GbieCreateSandbox(argv[0], OPEN_EXISTING);
+    if (!RunSandboxName || !RunCommandLine)
+    {
+        ConsolePrint(VT_RED("Error: too less arguments.\n"));
+        return FALSE;
+    }
+
+    PGBIE pGbie = GbieCreateSandbox(RunSandboxName, OPEN_EXISTING);
     if (!pGbie)
     {
         ConsolePrint(VT_RED("Error: sandbox %1 not found.\n"), argv[0]);
@@ -210,10 +248,10 @@ BOOL HandleRunCommand(int argc, WCHAR * *argv)
     HANDLE hProcess = NULL, hThread = NULL;
     if (!GbieCreateProcess(
         pGbie,
-        argv[1],
         NULL,
+        RunCommandLine,
         CREATE_NEW_CONSOLE,
-        NULL,
+        RunCurrentDirectory,
         &hProcess,
         &hThread))
     {

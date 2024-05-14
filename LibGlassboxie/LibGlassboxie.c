@@ -549,7 +549,6 @@ BOOL GbieSandboxSetNamedObjectAccess(
         ExplicitAccess.Trustee.TrusteeForm = TRUSTEE_IS_SID;
         ExplicitAccess.Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
 
-
         if (SetEntriesInAclW(1, &ExplicitAccess, OriginalACL, &NewACL) != ERROR_SUCCESS)
             __leave;
 
@@ -606,7 +605,7 @@ BOOL GbieCreateProcess(
         SECURITY_CAPABILITIES SecurityCapabilities = { 0 };
 
         WELL_KNOWN_SID_TYPE EnabledCapabilities[] = {
-            WinCapabilityPrivateNetworkClientServerSid
+            WinCapabilityInternetClientSid
         };
         SIZE_T CntEnabledCapabilities = _countof(EnabledCapabilities);
 
