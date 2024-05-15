@@ -13,17 +13,26 @@ EXTERN_C_START
 #define APPCONTAINER_DISPLAY_NAME_MAXLEN    512
 #define APPCONTAINER_DESCRIPTION_MAXLEN     2048
 
+typedef struct GLASSBOXIE_JOBLIMITS {
+    BOOL bHasMaxCPURate;
+    WORD MaxCPURate;
+
+    BOOL bHasMemoryLimit;
+    SIZE_T MemoryLimit;
+} GLASSBOXIE_JOBLIMITS, GBIE_JOBLIMITS, *PGBIE_JOBLIMITS;
+
 typedef struct GLASSBOXIE {
     WCHAR Name[APPCONTAINER_NAME_MAX + 1];
     WCHAR AppContainerName[APPCONTAINER_NAME_MAX + 1];
     PSID AppContainerSID;
     HANDLE hJobObject;
 
+    GBIE_JOBLIMITS JobLimits;
 } GLASSBOXIE, GBIE, *PGBIE;
 
 typedef struct GLASSBOXIE_OBJECTACCESS {
     // one of the following must be non-null
-    HANDLE hObject;
+    HANDLE  hObject;
     LPCWSTR pObjectName;
 
     SE_OBJECT_TYPE ObjectType;
@@ -33,7 +42,8 @@ typedef struct GLASSBOXIE_OBJECTACCESS {
 
 PGBIE GbieCreateSandbox(
     _In_ const WCHAR SandboxName[],
-    _In_ DWORD dwCreationDisposition);
+    _In_ DWORD dwCreationDisposition,
+    _Inout_opt_ PGBIE_JOBLIMITS JobLimits);
 
 BOOL GbieSandboxSetNamedObjectAccess(
     _Inout_ PGBIE pGbie,

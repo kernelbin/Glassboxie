@@ -255,6 +255,121 @@ static LSTATUS DeleteSandboxRegistry(
     return lStatus;
 }
 
+static BOOL ReadSandboxRegistry(
+    _In_ HKEY hKey,
+    _Inout_ PGBIE_JOBLIMITS pJobLimits
+)
+{
+    LSTATUS lStatus;
+
+    BOOL bHasMaxCPURate;
+    DWORD MaxCPURate;
+
+    BOOL bHasMemoryLimit;
+    DWORD MemoryLimit;
+
+    DWORD DummySize;
+
+    DummySize = sizeof(DWORD);
+    lStatus = RegGetValueW(
+        hKey,
+        L"JobLimits",
+        L"MemoryLimit",
+        RRF_RT_REG_DWORD,
+        NULL,
+        &MemoryLimit,
+        &DummySize);
+    if (lStatus == ERROR_FILE_NOT_FOUND)
+    {
+        bHasMemoryLimit = FALSE;
+    }
+    else if (lStatus == ERROR_SUCCESS)
+    {
+        bHasMemoryLimit = TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
+
+    DummySize = sizeof(DWORD);
+    lStatus = RegGetValueW(
+        hKey,
+        L"JobLimits",
+        L"MaxCPURate",
+        RRF_RT_REG_DWORD,
+        NULL,
+        &MaxCPURate,
+        &DummySize);
+    if (lStatus == ERROR_FILE_NOT_FOUND)
+    {
+        bHasMaxCPURate = FALSE;
+    }
+    else if (lStatus == ERROR_SUCCESS)
+    {
+        bHasMaxCPURate = TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
+
+    pJobLimits->bHasMemoryLimit = bHasMemoryLimit;
+    pJobLimits->MemoryLimit = (SIZE_T)MemoryLimit;
+
+    pJobLimits->bHasMaxCPURate = bHasMaxCPURate;
+    pJobLimits->MaxCPURate = (WORD)MaxCPURate;
+    return TRUE;
+}
+
+static BOOL WriteSandboxRegistry(
+    _In_ HKEY hKey,
+    _In_ PGBIE_JOBLIMITS pJobLimits
+)
+{
+    LSTATUS lStatus = ERROR_SUCCESS;
+
+    if (pJobLimits->bHasMemoryLimit)
+    {
+        DWORD MemoryLimit = pJobLimits->MemoryLimit;
+        lStatus = RegSetKeyValueW(
+            hKey,
+            L"JobLimits",
+            L"MemoryLimit",
+            REG_DWORD,
+            &MemoryLimit,
+            sizeof(DWORD));
+    }
+    else
+    {
+        RegDeleteKeyValueW(hKey, L"JobLimits", L"MemoryLimit");
+    }
+
+    if (lStatus != ERROR_SUCCESS)
+        return FALSE;
+
+    if (pJobLimits->bHasMaxCPURate)
+    {
+        DWORD MaxCPURate = pJobLimits->MaxCPURate;
+        lStatus = RegSetKeyValueW(
+            hKey,
+            L"JobLimits",
+            L"MaxCPURate",
+            REG_DWORD,
+            &MaxCPURate,
+            sizeof(DWORD));
+    }
+    else
+    {
+        RegDeleteKeyValueW(hKey, L"JobLimits", L"MaxCPURate");
+    }
+
+    if (lStatus != ERROR_SUCCESS)
+        return FALSE;
+
+    return TRUE;
+}
+
 static BOOL AllocateEnabledSecurityCapabilities(
     _Inout_ PSID_AND_ATTRIBUTES* pSecurityCapabilities,
     _In_reads_(CntCapabilities) WELL_KNOWN_SID_TYPE* EnabledCapabilities,
@@ -328,7 +443,8 @@ static BOOL FreeSecurityCapabilities(
 _Use_decl_annotations_
 PGBIE GbieCreateSandbox(
     const WCHAR SandboxName[],
-    DWORD dwCreationDisposition)
+    DWORD dwCreationDisposition,
+    PGBIE_JOBLIMITS JobLimits)
 {
 
     BOOL bSuccess = FALSE;
@@ -339,6 +455,7 @@ PGBIE GbieCreateSandbox(
     DWORD dwSandboxRegkeyDisposition = 0;
 
     WCHAR ExtendHashName[32];
+
     GetExtendHashName(SandboxName, ExtendHashName, _countof(ExtendHashName));
 
     // AppContainerName can be up to 64 characters in length. 
@@ -369,6 +486,9 @@ PGBIE GbieCreateSandbox(
     pGbie = (PGBIE)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(GBIE));
     if (!pGbie)
         return FALSE;
+
+    if (JobLimits)
+        pGbie->JobLimits = *JobLimits;
 
     __try
     {
@@ -409,6 +529,9 @@ PGBIE GbieCreateSandbox(
                     &pAppContainerSID);
                 if (FAILED(hresult))
                     __leave;
+
+                if (!WriteSandboxRegistry(hKeySandbox, &(pGbie->JobLimits)))
+                    __leave;
             }
             else if (dwCreationDisposition == CREATE_NEW)
             {
@@ -425,6 +548,8 @@ PGBIE GbieCreateSandbox(
                 {
                     __leave;
                 }
+                if (!ReadSandboxRegistry(hKeySandbox, &(pGbie->JobLimits)))
+                    __leave;
             }
             else
             {
@@ -439,7 +564,8 @@ PGBIE GbieCreateSandbox(
                 dwCreationDisposition == OPEN_ALWAYS)
             {
                 // OK
-                // TODO: grant access to objects...
+                if (!WriteSandboxRegistry(hKeySandbox, &(pGbie->JobLimits)))
+                    __leave;
             }
             else if (dwCreationDisposition == OPEN_EXISTING)
             {
@@ -460,10 +586,42 @@ PGBIE GbieCreateSandbox(
 
         // TODO: better to be created in private namespace...?
         // see CreatePrivateNamespaceW
+
+        // Create JobObject and set information
         hJobObject = CreateJobObjectW(NULL, JobObjectName);
         if (!hJobObject)
         {
             __leave;
+        }
+
+        if (pGbie->JobLimits.bHasMemoryLimit)
+        {
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION ExtendLimit = { 0 };
+            ExtendLimit.JobMemoryLimit = pGbie->JobLimits.MemoryLimit;
+            ExtendLimit.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_JOB_MEMORY;
+
+            if (!SetInformationJobObject(
+                hJobObject,
+                JobObjectExtendedLimitInformation,
+                &ExtendLimit,
+                sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)))
+            {
+                __leave;
+            }
+        }
+        if (pGbie->JobLimits.bHasMaxCPURate)
+        {
+            JOBOBJECT_CPU_RATE_CONTROL_INFORMATION CpuControl = { 0 };
+            CpuControl.ControlFlags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+            CpuControl.CpuRate = pGbie->JobLimits.MaxCPURate;
+            if (!SetInformationJobObject(
+                hJobObject,
+                JobObjectCpuRateControlInformation,
+                &CpuControl,
+                sizeof(JOBOBJECT_CPU_RATE_CONTROL_INFORMATION)))
+            {
+                __leave;
+            }
         }
 
         // Copy information into pGbie

@@ -22,6 +22,12 @@ struct GBIE_CONFIG
     std::wstring Name;
     std::wstring Version;
     std::vector<GBIE_STORAGE_SETTINGS> StorageSettingsList;
+
+    BOOL bHasMaxCPURate;
+    WORD MaxCPURate;
+
+    BOOL bHasMemoryLimit;
+    SIZE_T MemoryLimit;
 };
 
 _Success_(return)
@@ -60,6 +66,8 @@ static BOOL ParseConfigFile(
             yyjson_obj_get(JsonRoot, "version");
         yyjson_val* JsonStorageSettings =
             yyjson_obj_get(JsonRoot, "storage_settings");
+        yyjson_val* JsonResourcesLimits =
+            yyjson_obj_get(JsonRoot, "resource_limits");
 
         if (!JsonName || !JsonVersion)
             __leave;
@@ -77,6 +85,7 @@ static BOOL ParseConfigFile(
 
                 for (SIZE_T i = 0; i < StorageSettingsSize; i++)
                 {
+                    // use lambda to avoid C++ object initialization (which can't use alongside with SEH
                     [](GBIE_CONFIG& Config, yyjson_val* StorageSettingsEntry) {
 
                         yyjson_val* PathVal;
@@ -101,6 +110,30 @@ static BOOL ParseConfigFile(
                         }(Config, StorageSettingsEntry);
 
                         StorageSettingsEntry = unsafe_yyjson_get_next(StorageSettingsEntry);
+                }
+            }
+        }
+
+        Config.bHasMaxCPURate = FALSE;
+        Config.bHasMemoryLimit = FALSE;
+        if (JsonResourcesLimits)
+        {
+            if (yyjson_is_obj(JsonResourcesLimits))
+            {
+                yyjson_val* JsonCPURate =
+                    yyjson_obj_get(JsonResourcesLimits, "cpu");
+                yyjson_val* JsonMemeoryLimit =
+                    yyjson_obj_get(JsonResourcesLimits, "memory");
+
+                if (yyjson_is_uint(JsonCPURate))
+                {
+                    Config.MaxCPURate = yyjson_get_uint(JsonCPURate);
+                    Config.bHasMaxCPURate = TRUE;
+                }
+                if (yyjson_is_uint(JsonMemeoryLimit))
+                {
+                    Config.MemoryLimit = yyjson_get_uint(JsonMemeoryLimit);
+                    Config.bHasMemoryLimit = TRUE;
                 }
             }
         }
@@ -153,7 +186,13 @@ BOOL HandleCreateCommand(int argc, WCHAR * *argv)
             continue;
         }
 
-        PGBIE pGbie = GbieCreateSandbox(Config.Name.c_str(), CREATE_ALWAYS);
+        GBIE_JOBLIMITS JobLimits;
+        JobLimits.bHasMaxCPURate = Config.bHasMaxCPURate;
+        JobLimits.MaxCPURate = Config.MaxCPURate;
+        JobLimits.bHasMemoryLimit = Config.bHasMemoryLimit;
+        JobLimits.MemoryLimit = Config.MemoryLimit;
+
+        PGBIE pGbie = GbieCreateSandbox(Config.Name.c_str(), CREATE_ALWAYS, &JobLimits);
         if (!pGbie)
         {
             ConsolePrint(
@@ -163,7 +202,6 @@ BOOL HandleCreateCommand(int argc, WCHAR * *argv)
         }
 
         // Also set storage settings
-
         for (auto& StorageSetting : Config.StorageSettingsList)
         {
             GBIE_OBJECT_ACCESS ObjectAccess = { 0 };
@@ -182,6 +220,7 @@ BOOL HandleCreateCommand(int argc, WCHAR * *argv)
                 );
             }
         }
+
         GbieCloseSandbox(pGbie);
     }
 
@@ -238,7 +277,7 @@ BOOL HandleRunCommand(int argc, WCHAR * *argv)
         return FALSE;
     }
 
-    PGBIE pGbie = GbieCreateSandbox(RunSandboxName, OPEN_EXISTING);
+    PGBIE pGbie = GbieCreateSandbox(RunSandboxName, OPEN_EXISTING, NULL);
     if (!pGbie)
     {
         ConsolePrint(VT_RED("Error: sandbox %1 not found.\n"), argv[0]);
