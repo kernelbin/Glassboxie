@@ -45,7 +45,7 @@ PGBIE GbieCreateSandbox(
     _In_ DWORD dwCreationDisposition,
     _Inout_opt_ PGBIE_JOBLIMITS JobLimits);
 
-BOOL GbieSandboxSetNamedObjectAccess(
+BOOL GbieSandboxSetObjectAccess(
     _Inout_ PGBIE pGbie,
     _In_ PGBIE_OBJECT_ACCESS pObjectAccess
     );

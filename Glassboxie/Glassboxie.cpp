@@ -211,7 +211,7 @@ BOOL HandleCreateCommand(int argc, WCHAR * *argv)
             ObjectAccess.pObjectName = StorageSetting.Path.c_str();
             ObjectAccess.hObject = NULL;
 
-            if (!GbieSandboxSetNamedObjectAccess(pGbie, &ObjectAccess))
+            if (!GbieSandboxSetObjectAccess(pGbie, &ObjectAccess))
             {
                 ConsolePrint(
                     VT_YELLOW("Warning: failed to grant file access to sandbox %1. file: %2\n"),

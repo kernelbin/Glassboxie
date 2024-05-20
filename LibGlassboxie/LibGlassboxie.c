@@ -660,7 +660,7 @@ PGBIE GbieCreateSandbox(
 }
 
 _Use_decl_annotations_
-BOOL GbieSandboxSetNamedObjectAccess(
+BOOL GbieSandboxSetObjectAccess(
     PGBIE pGbie,
     PGBIE_OBJECT_ACCESS pObjectAccess
 )
